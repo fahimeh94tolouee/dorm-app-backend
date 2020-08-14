@@ -71,6 +71,7 @@ class UserSerializer(SetCustomErrorMessagesMixin, serializers.ModelSerializer):
 
 
 class AccountSerializer(EnumSupportSerializerMixin, serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.username')
     first_name = serializers.CharField(
         required=False,
         max_length=50,

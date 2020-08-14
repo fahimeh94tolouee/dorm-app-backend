@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 import requests
 from .serializers import RoomsSerializers, Room_UserSerializers, UserRelationsInRoomSerializers
 from accounts.models import Account
+from accounts.serializers import AccountSerializer
 from .models import Room, Room_User, UserRelationsInRoom, StateType, RelationStateType
 
 
@@ -105,22 +106,117 @@ def request_room(request, room_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, ])
-def answer_user(request, user_id):
+def answer_user(request):
     answer = request.data['answer']  # true or false
-    data = {"data": "", "message": ""}
-    return Response(data)
+    pended_account_id = request.data['pended_account_id']
+    responder_user_id = request.user
+    responder_account_id = Account.objects.filter(user=responder_user_id).first()
+    pended_account = Account.objects.filter(id=pended_account_id).first()
+    rowInPendedAccountAndRespondedAccountInRelationTable = UserRelationsInRoom.objects.filter(
+        user1=responder_account_id,
+        user2=pended_account_id,
+        user1_to_user2_state=RelationStateType.PENDING
+    ).first()
+
+    if (pended_account is not None) and (rowInPendedAccountAndRespondedAccountInRelationTable is not None):
+        if answer:
+            data = {"user1": responder_account_id, "user2": pended_account_id,
+                    "user1_to_user2_state": RelationStateType.OK}
+            serializer = UserRelationsInRoomSerializers(data=data)
+            serializer.is_valid()
+            serializer.save()
+            checkAddToRoom(pended_account_id, responder_account_id)
+        else:
+            pass
+            # TODO delete relations Row and user_room Rows
+    else:
+        data = {"message": "کاربر مورد نظر شما یافت نشد!"}
+        return Response(data)
+
+
+def checkAddToRoom(pended_id, responder_id):
+    room_user_row = Room_User.objects.filter(user=pended_id).first()
+    room_user_row_confirm = Room_User.objects.filter(user=responder_id).first()
+    if (room_user_row == room_user_row_confirm) and (room_user_row_confirm is not None):
+        room_id = room_user_row.room
+        real_room_member_rows = Room_User.objects.filter(room=room_id,
+                                                         user_state=StateType.OK)  # All confirmed room members
+        confirm = True
+        for row in real_room_member_rows:
+            real_member_id = row.user_id
+            row_for_real_member_ok_with_pended_member = UserRelationsInRoom.objects.filter(
+                user1=real_member_id, user2=pended_id, user1_to_user2_state=RelationStateType.OK
+            ).first()
+            row_for_pended_member_ok_with_real_member = UserRelationsInRoom.objects.filter(
+                user1=pended_id, user2=real_member_id, user1_to_user2_state=RelationStateType.OK
+            ).first()
+            if (row_for_real_member_ok_with_pended_member is None) or (
+                    row_for_pended_member_ok_with_real_member is None):
+                confirm = False
+                break
+        if confirm:
+            serializer = Room_UserSerializers(data={"room": room_id, "user": pended_id, "user_state": StateType.OK})
+            serializer.is_valid()
+            serializer.save()
+            data = {
+                "message": "عضوی که شما تایید کردید تایید همه اعضای اتاق را گرفته است و همچنین اعضای تایید شده اتاق را تایید کرده است و به اتاق اضافه می‌شود."}
+            # TODO Response monaseb shamel pending inayeh jadid
+            return Response(data)
+        else:
+            data = {
+                "message": "عضوی که شما تایید کردید تایید همه اعضای اتاق را نگرفته است و یا همه اعضای تایید شده اتاق را تایید نکرده است و فعلا باید منتظر بماند."}
+            # TODO Response monaseb shamel pending inayeh jadid
+            return Response(data)
+    else:
+        data = {"message": "اتاقی برای این کاربر ثبت نشده است!"}
+        return Response(data)
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, ])
-def get_pended_user(request):
-    data = {"message": ""}
+def get_waiting_users(request):
     user = request.user
     account = Account.objects.filter(user=user).first()
-    pendedUsers = UserRelationsInRoom.objects.filter(user1=account, user1_to_user2_state=RelationStateType.PENDING)
-    print(list(pendedUsers))
-    serializer = UserRelationsInRoomSerializers(list(pendedUsers), many=True)
-    return Response(serializer.data)
+    row_for_user_in_room_user = Room_User.objects.filter(user=account.id).first()
+    data = {"data": [], "message": ""}
+    if row_for_user_in_room_user is None:
+        data['not_request_for_room'] = True
+        return Response(data, status=status.HTTP_200_OK)
+    else:
+        state_in_room = row_for_user_in_room_user.user_state
+        waitingUsers = []
+        if state_in_room == StateType.OK:
+            waitingUsers1 = UserRelationsInRoom.objects.filter(user1=account.id,
+                                                               user1_to_user2_state=RelationStateType.PENDING)
+            waitingUsers2 = UserRelationsInRoom.objects.filter(user1=account.id,
+                                                               user1_to_user2_state=RelationStateType.UNKNOWN)
+            waitingUsers1.union(waitingUsers2)
+            for w_u in waitingUsers1:
+                waitingUser = Account.objects.filter(id=w_u.user2_id).first()
+                waitingUsers.append(waitingUser)
+        elif state_in_room == StateType.PENDING:
+            room_id = row_for_user_in_room_user.room_id
+            real_room_users_rows = Room_User.objects.filter(room=room_id, user_state=StateType.OK)
+            waitingUsers = []
+            for row in real_room_users_rows:
+                real_user_id = row.user_id
+                relation_between_owner_and_real_user_row = UserRelationsInRoom.objects.filter(user1=account.id,
+                                                                                              user2=real_user_id,
+                                                                                              user1_to_user2_state=RelationStateType.PENDING).first()
+                if relation_between_owner_and_real_user_row is not None:
+                    waitingUser = Account.objects.filter(id=real_user_id).first()
+                    waitingUsers.append(waitingUser)
+                relation_between_owner_and_real_user_row = UserRelationsInRoom.objects.filter(user1=account.id,
+                                                                                              user2=real_user_id,
+                                                                                              user1_to_user2_state=RelationStateType.UNKNOWN).first()
+                if relation_between_owner_and_real_user_row is not None:
+                    waitingUser = Account.objects.filter(id=real_user_id).first()
+                    waitingUsers.append(waitingUser)
+
+        print(waitingUsers)
+        serializer = AccountSerializer(waitingUsers, many=True)
+        data['data'] = serializer.data
+        return Response(data)
 
 
 @api_view(['DELETE'])

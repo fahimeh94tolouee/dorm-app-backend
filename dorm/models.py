@@ -5,9 +5,9 @@ from enumfields import EnumIntegerField
 
 
 class Room(models.Model):
-    block_number = models.IntegerField(max_length=10)
-    room_number = models.IntegerField(max_length=10)
-    capacity = models.IntegerField(max_length=10)
+    block_number = models.IntegerField()
+    room_number = models.IntegerField()
+    capacity = models.IntegerField()
 
     def __str__(self):
         return str(self.block_number) + "-" + str(self.room_number)
@@ -28,7 +28,7 @@ class StateType(Enum):
 
 class Room_User(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE)
-    user = models.ForeignKey(Account, on_delete=models.CASCADE, unique=True)
+    user = models.OneToOneField(Account, on_delete=models.CASCADE)
     user_state = EnumIntegerField(StateType, default=StateType.NONE)
 
     # class Meta:
