@@ -1,7 +1,8 @@
 from django.db import models
 from enum import Enum
+from enumfields import EnumIntegerField
 from django.contrib.auth.models import User
-from enumfields import EnumField, EnumIntegerField
+# from dorm.models import Room
 
 
 class ReligiousBelief(Enum):
@@ -50,3 +51,4 @@ class Account(models.Model):
     noise_type = EnumIntegerField(NoiseType, default=NoiseType.NONE)
     personality_type = EnumIntegerField(PersonalityType, default=PersonalityType.NONE)
     note = models.CharField(max_length=255, default="")
+    # room = models.ForeignKey(to=Room, related_name="members", null=True, blank=True, on_delete=models.SET_NULL, default=None)
