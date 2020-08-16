@@ -107,40 +107,50 @@ def request_room(request, room_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, ])
 def answer_user(request):
+    message = ""
     answer = request.data['answer']  # true or false
     pended_account_id = request.data['pended_account_id']
     responder_user_id = request.user
-    responder_account_id = Account.objects.filter(user=responder_user_id).first()
+    responder_account = Account.objects.filter(user=responder_user_id).first()
     pended_account = Account.objects.filter(id=pended_account_id).first()
     rowInPendedAccountAndRespondedAccountInRelationTable = UserRelationsInRoom.objects.filter(
-        user1=responder_account_id,
+        user1=responder_account.id,
         user2=pended_account_id,
         user1_to_user2_state=RelationStateType.PENDING
     ).first()
 
     if (pended_account is not None) and (rowInPendedAccountAndRespondedAccountInRelationTable is not None):
         if answer:
-            data = {"user1": responder_account_id, "user2": pended_account_id,
+            data = {"user1": responder_account.id, "user2": pended_account_id,
                     "user1_to_user2_state": RelationStateType.OK}
-            serializer = UserRelationsInRoomSerializers(data=data)
+            serializer = UserRelationsInRoomSerializers(rowInPendedAccountAndRespondedAccountInRelationTable, data=data)
             serializer.is_valid()
             serializer.save()
-            checkAddToRoom(pended_account_id, responder_account_id)
+            message = checkAddToRoom(pended_account_id, responder_account.id)
         else:
             pass
             # TODO delete relations Row and user_room Rows
+            message = "رد فرد مورد نظر با موفقیت انجام شد."
     else:
-        data = {"message": "کاربر مورد نظر شما یافت نشد!"}
-        return Response(data)
+        message = "کاربر مورد نظر شما یافت نشد!"
+    room_user_row = Room_User.objects.filter(user=pended_account_id).first()
+    all_corresponding_room_user_rows = Room_User.objects.filter(room=room_user_row.room.id)
+    all_user_with_state = Account.objects.filter(id__in=all_corresponding_room_user_rows.values('user_id'))
+    print(all_user_with_state, "TTTT")
+    membersListSerializer = Room_UserSerializers(list(all_corresponding_room_user_rows), many=True)
+    data = {"data": membersListSerializer.data, "message": message}
+    return Response(data)
 
 
 def checkAddToRoom(pended_id, responder_id):
+    message = ""
     room_user_row = Room_User.objects.filter(user=pended_id).first()
     room_user_row_confirm = Room_User.objects.filter(user=responder_id).first()
-    if (room_user_row == room_user_row_confirm) and (room_user_row_confirm is not None):
-        room_id = room_user_row.room
-        real_room_member_rows = Room_User.objects.filter(room=room_id,
+    if (room_user_row_confirm is not None) and (room_user_row.room == room_user_row_confirm.room):
+        room = room_user_row.room
+        real_room_member_rows = Room_User.objects.filter(room=room,
                                                          user_state=StateType.OK)  # All confirmed room members
+        # print(real_room_member_rows, "RR")
         confirm = True
         for row in real_room_member_rows:
             real_member_id = row.user_id
@@ -155,21 +165,18 @@ def checkAddToRoom(pended_id, responder_id):
                 confirm = False
                 break
         if confirm:
-            serializer = Room_UserSerializers(data={"room": room_id, "user": pended_id, "user_state": StateType.OK})
+            serializer = Room_UserSerializers(room_user_row,
+                                              data={"room": room.id, "user": pended_id, "user_state": StateType.OK})
             serializer.is_valid()
             serializer.save()
-            data = {
-                "message": "عضوی که شما تایید کردید تایید همه اعضای اتاق را گرفته است و همچنین اعضای تایید شده اتاق را تایید کرده است و به اتاق اضافه می‌شود."}
+            message = "عضوی که شما تایید کردید تایید همه اعضای اتاق را گرفته است و همچنین اعضای تایید شده اتاق را تایید کرده است و به اتاق اضافه می‌شود."
             # TODO Response monaseb shamel pending inayeh jadid
-            return Response(data)
         else:
-            data = {
-                "message": "عضوی که شما تایید کردید تایید همه اعضای اتاق را نگرفته است و یا همه اعضای تایید شده اتاق را تایید نکرده است و فعلا باید منتظر بماند."}
+            message = "عضوی که شما تایید کردید تایید همه اعضای اتاق را نگرفته است و یا همه اعضای تایید شده اتاق را تایید نکرده است و فعلا باید منتظر بماند."
             # TODO Response monaseb shamel pending inayeh jadid
-            return Response(data)
     else:
-        data = {"message": "اتاقی برای این کاربر ثبت نشده است!"}
-        return Response(data)
+        message = "اتاقی برای این کاربر ثبت نشده است!"
+    return message
 
 
 @api_view(['GET'])
