@@ -65,6 +65,7 @@ def login(request):
         },
     )
     message = ""
+    # r.headers['Access-Control-Allow-Origin'] = '*'
     if r.status_code == status.HTTP_400_BAD_REQUEST:
         message = "نام کاربری و یا رمز عبور اشتباه است."
     if r.status_code == status.HTTP_401_UNAUTHORIZED:

@@ -23,7 +23,7 @@ SECRET_KEY = 'alv*8v8j+i#0yead8bd_*wjrxvr-cf)mxi5!bih(hi__-)k585'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['192.168.1.5']
 
 # Application definition
 from .exception import custom_exception_handler
@@ -38,13 +38,15 @@ INSTALLED_APPS = [
     'oauth2_provider',  # OAuth2
     'rest_framework',  # API
     'accounts',
-    'dorm'
+    'dorm',
+    'corsheaders'
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'oauth2_provider.middleware.OAuth2TokenMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'project_final.disable.DisableCSRF',
     # 'django.middleware.csrf.CsrfViewMiddleware',
@@ -134,10 +136,12 @@ USE_L10N = True
 
 USE_TZ = True
 
-BASE_ROUTE = "http://127.0.0.1:8000"
+BASE_ROUTE = "http://192.168.1.5:8000"
 CLIENT_ID = "AjVh1L7J7uqNrv8IQ5PCuR56VNAMIkB3O77fGPm2"
 CLIENT_SECRET = "f5iFJpNuPdF1hlRdAevj0uMqGGebkpCLY01A6Zc5pxG3X9et0hy4obOBDxy6yvmFPPs2Mmgl3thyC6GxjYlTd22zhrogEsvrNdGnbhfTllgvOqrdDZ5c7oz06MamQRm7"
 
+CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_CREDENTIALS = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 
