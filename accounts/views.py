@@ -136,11 +136,13 @@ def update_account(request):
     if isinstance(request.user, User):
         account = Account.objects.filter(user=request.user).first()
         # print(serializer.is_valid(), request.data)
-        data = JSONParser().parse(request)
-        serializer = AccountSerializer(account, data=data)
+        # print(request.data, "RRR")
+        # data = JSONParser().parse(request.data)
+        serializer = AccountSerializer(account, data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data)
+            data = {"data": serializer.data, "message": "اطلاعات حساب شما باموفیت به روز رسانی شد."}
+            return Response(data)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
