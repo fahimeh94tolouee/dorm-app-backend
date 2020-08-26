@@ -12,8 +12,19 @@ from .models import Room, Room_User, UserRelationsInRoom, StateType, RelationSta
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, ])
 def get_rooms(request):
+    user = request.user
+    account = Account.objects.filter(user=user).first()
+    row_for_user_in_room_user = Room_User.objects.filter(user=account.id).first()
     rooms = Room.objects.all()
-    serializer = RoomsSerializers(rooms, many=True)
+    roomsArray = []
+    for room in rooms:
+        _data = RoomsSerializers(room).data
+        if room.id == row_for_user_in_room_user.room_id:
+            _data['my_status'] = row_for_user_in_room_user.user_state.value
+            print(_data, "WW")
+
+        roomsArray.append(_data)
+    serializer = RoomsSerializers(roomsArray, many=True)
     return Response(data=serializer.data, status=status.HTTP_200_OK)
 
 

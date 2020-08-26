@@ -1,10 +1,12 @@
 from rest_framework import serializers
-from .models import Room, Room_User, UserRelationsInRoom
+from .models import Room, Room_User, UserRelationsInRoom, StateType
 from accounts.serializers import AccountSerializer
 from enumfields.drf.serializers import EnumSupportSerializerMixin
 
 
-class RoomsSerializers(serializers.ModelSerializer):
+class RoomsSerializers(EnumSupportSerializerMixin, serializers.ModelSerializer):
+    my_status = serializers.IntegerField(default=StateType.NONE.value)
+
     class Meta:
         model = Room
         fields = "__all__"
