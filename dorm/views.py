@@ -21,10 +21,18 @@ def get_rooms(request):
         _data = RoomsSerializers(room).data
         if room.id == row_for_user_in_room_user.room_id:
             _data['my_status'] = row_for_user_in_room_user.user_state.value
-            print(_data, "WW")
-
         roomsArray.append(_data)
     serializer = RoomsSerializers(roomsArray, many=True)
+    return Response(data=serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, ])
+def get_room_info(request, room_id):
+    user = request.user
+    account = Account.objects.filter(user=user).first()
+    rows_for_room_in_room_user = Room_User.objects.filter(room=room_id)
+    serializer = Room_UserSerializers(rows_for_room_in_room_user, many=True)
     return Response(data=serializer.data, status=status.HTTP_200_OK)
 
 
