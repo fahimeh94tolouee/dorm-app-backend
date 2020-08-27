@@ -13,11 +13,14 @@ class RoomsSerializers(EnumSupportSerializerMixin, serializers.ModelSerializer):
 
 
 class Room_UserSerializers(EnumSupportSerializerMixin, serializers.ModelSerializer):
-    user = AccountSerializer(read_only=True)
 
     class Meta:
         model = Room_User
         fields = "__all__"
+
+    def to_representation(self, obj):
+        self.fields['user'] = AccountSerializer(read_only=True)
+        return super().to_representation(obj)
 
 
 class UserRelationsInRoomSerializers(EnumSupportSerializerMixin, serializers.ModelSerializer):

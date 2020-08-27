@@ -9,21 +9,26 @@ from accounts.serializers import AccountSerializer
 from .models import Room, Room_User, UserRelationsInRoom, StateType, RelationStateType
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated, ])
-def get_rooms(request):
-    user = request.user
+def getRooms(user):
     account = Account.objects.filter(user=user).first()
     row_for_user_in_room_user = Room_User.objects.filter(user=account.id).first()
     rooms = Room.objects.all()
     roomsArray = []
     for room in rooms:
         _data = RoomsSerializers(room).data
-        if room.id == row_for_user_in_room_user.room_id:
+        if (row_for_user_in_room_user is not None) and (room.id == row_for_user_in_room_user.room_id):
             _data['my_status'] = row_for_user_in_room_user.user_state.value
         roomsArray.append(_data)
     serializer = RoomsSerializers(roomsArray, many=True)
-    return Response(data=serializer.data, status=status.HTTP_200_OK)
+    return serializer.data
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, ])
+def get_rooms(request):
+    user = request.user
+    data = getRooms(user)
+    return Response(data=data, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])
@@ -40,87 +45,107 @@ def get_room_info(request, room_id):
 @permission_classes([IsAuthenticated, ])
 def request_room(request, room_id):
     room = Room.objects.filter(id=room_id).first()
+    finalData = {"message": "", "data": []}
+    responseStatus = status.HTTP_200_OK
+    user = request.user
+    isAddRequest = request.data["is_add"]
     if room is not None:
-        user = request.user
         account = Account.objects.filter(user=user).first()
-        roomWithUsers = Room_User.objects.filter(room_id=room_id)
-        userRoom = Room_User.objects.filter(user=account).first()
-        if userRoom is None:
-            roomMembersNum = len(roomWithUsers)
-            if roomMembersNum == 0:
-                serializer = Room_UserSerializers(
-                    data={"user": account.id, "room": room.id, "user_state": StateType.OK})
-                if serializer.is_valid():
-                    serializer.save()
-                    data = {"message": "به اتاق اضافه شدید."}
-                    return Response(data)
-                else:
-                    print(serializer.errors)
-                    data = {"message": "دیتا ناصحیح است."}
-                    return Response(data)
-            else:
-                if roomMembersNum < room.capacity:
-                    print(roomMembersNum, "EE")
+        userRoomArray = Room_User.objects.filter(user=account)
+        if isAddRequest:
+            userRoom = userRoomArray.first()
+            if userRoom is None:
+                roomWithUsers = Room_User.objects.filter(room_id=room_id)
+                roomMembersNum = len(roomWithUsers)
+                if roomMembersNum == 0:
                     serializer = Room_UserSerializers(
-                        data={"user": account.id, "room": room.id, "user_state": StateType.PENDING})
-                    serializer.is_valid()
-                    print(serializer.errors, " room-user")
-                    serializer.save()
-                    for row in roomWithUsers:
-                        serializer = UserRelationsInRoomSerializers(
-                            data={
-                                "user1": account.id,
-                                "user2": row.user_id,
-                                "user1_to_user2_state": RelationStateType.OK
-                            }
-                        )
-                        serializer.is_valid()
-                        print(serializer.errors, " user-relations- inRoom-> requester")
+                        data={"user": account.id, "room": room.id, "user_state": StateType.OK})
+                    if serializer.is_valid():
                         serializer.save()
-                        if row.user_state == StateType.OK:
-                            serializer = UserRelationsInRoomSerializers(
-                                data={
-                                    "user1": row.user_id,
-                                    "user2": account.id,
-                                    "user1_to_user2_state": RelationStateType.PENDING
-                                }
-                            )
-                            serializer.is_valid()
-                            print(serializer.errors, " user-relations- requester->inRoom")
-                            serializer.save()
-
-                        elif row.user_state == StateType.PENDING:
-                            serializer = UserRelationsInRoomSerializers(
-                                data={
-                                    "user1": row.user_id,
-                                    "user2": account.id,
-                                    "user1_to_user2_state": RelationStateType.UNKNOWN
-                                }
-                            )
-                            serializer.is_valid()
-                            print(serializer.errors, " user-relations- requester->inRoom")
-                            serializer.save()
-                        # print(row.user_id)
-                    data = {"message": "درخواست شما ارسال شد."}
-                    return Response(data)
+                        finalData["message"] = "به اتاق اضافه شدید."
+                    else:
+                        print(serializer.errors, "CCC")
+                        finalData["message"] = "دیتا ناصحیح است."
+                        responseStatus = status.HTTP_400_BAD_REQUEST
                 else:
-                    data = {"message": "ظرفیت اتاق تکمیل است."}
-                    return Response(data, status=status.HTTP_400_BAD_REQUEST)
+                    if roomMembersNum < room.capacity:
+                        print(roomMembersNum, "EE")
+                        serializer = Room_UserSerializers(
+                            data={"user": account.id, "room": room.id, "user_state": StateType.PENDING})
+                        serializer.is_valid()
+                        print(serializer.errors, " room-user")
+                        serializer.save()
+                        for row in roomWithUsers:
+                            serializer = UserRelationsInRoomSerializers(
+                                data={
+                                    "user1": account.id,
+                                    "user2": row.user_id,
+                                    "user1_to_user2_state": RelationStateType.OK
+                                }
+                            )
+                            serializer.is_valid()
+                            print(serializer.errors, " user-relations- inRoom-> requester")
+                            serializer.save()
+                            if row.user_state == StateType.OK:
+                                serializer = UserRelationsInRoomSerializers(
+                                    data={
+                                        "user1": row.user_id,
+                                        "user2": account.id,
+                                        "user1_to_user2_state": RelationStateType.PENDING
+                                    }
+                                )
+                                serializer.is_valid()
+                                print(serializer.errors, " user-relations- requester->inRoom")
+                                serializer.save()
+
+                            elif row.user_state == StateType.PENDING:
+                                serializer = UserRelationsInRoomSerializers(
+                                    data={
+                                        "user1": row.user_id,
+                                        "user2": account.id,
+                                        "user1_to_user2_state": RelationStateType.UNKNOWN
+                                    }
+                                )
+                                serializer.is_valid()
+                                print(serializer.errors, " user-relations- requester->inRoom")
+                                serializer.save()
+                            # print(row.user_id)
+                        finalData["message"] = "درخواست شما ارسال شد."
+                    else:
+                        finalData["message"] = "ظرفیت اتاق تکمیل است."
+                        responseStatus = status.HTTP_400_BAD_REQUEST
+            else:
+                state = userRoom.user_state
+                user_room = userRoom.room
+                text = ""
+                print(user_room, state, "PP")
+                if state == StateType.OK:
+                    text = " به عنوان عضو "
+                elif state == StateType.PENDING:
+                    text = " به عنوان منتظر "
+                finalData["message"] = "شما در اتاق " + str(user_room) + text + "ثبت شده‌اید."
+                responseStatus = status.HTTP_400_BAD_REQUEST
         else:
-            state = userRoom.user_state
-            user_room = userRoom.room
-            text = ""
-            print(user_room, state, "PP")
-            if state == StateType.OK:
-                text = " به عنوان عضو "
-            elif state == StateType.PENDING:
-                text = " به عنوان منتظر "
-            data = {"message": "شما در اتاق " + str(user_room) + text + "ثبت شده‌اید."}
-            return Response(data, status=status.HTTP_400_BAD_REQUEST)
+            if userRoomArray.first():
+                userRoomArray.delete()
+                UserRelationsInRoom.objects.filter(user1=account).delete()
+                UserRelationsInRoom.objects.filter(user2=account).delete()
+                finalData["message"] = "با موفقیت از اتاق " + str(room) + " حذف شدید."
+            else:
+                finalData["message"] = "شما از اعضای اتاق " + str(room) + " نمی‌باشید."
 
     else:
-        data = {"message": "اتاق مورد نظر پیدا نشد."}
-        return Response(data, status=status.HTTP_404_NOT_FOUND)
+        finalData["message"] = "شما در اتاق ""اتاق مورد نظر پیدا نشد."
+        responseStatus = status.HTTP_404_NOT_FOUND
+    finalData["data"] = getRooms(user)
+    return Response(finalData, status=responseStatus)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated, ])
+def delete_request(request):
+    data = {"data": "", "message": ""}
+    return Response(data)
 
 
 @api_view(['POST'])
@@ -243,10 +268,3 @@ def get_waiting_users(request):
         serializer = AccountSerializer(waitingUsers, many=True)
         data['data'] = serializer.data
         return Response(data)
-
-
-@api_view(['DELETE'])
-@permission_classes([IsAuthenticated, ])
-def delete_request(request):
-    data = {"data": "", "message": ""}
-    return Response(data)
