@@ -133,6 +133,7 @@ def request_room(request, room_id):
                 finalData["message"] = "با موفقیت از اتاق " + str(room) + " حذف شدید."
             else:
                 finalData["message"] = "شما از اعضای اتاق " + str(room) + " نمی‌باشید."
+                responseStatus = status.HTTP_404_NOT_FOUND
 
     else:
         finalData["message"] = "شما در اتاق ""اتاق مورد نظر پیدا نشد."
