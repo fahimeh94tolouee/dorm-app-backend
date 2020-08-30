@@ -120,8 +120,8 @@ def revoke_token(request):
 @api_view(['GET'])
 @permission_classes((IsAuthenticated,))
 def get_account(request):
-    if isinstance(request.user, User):
-        account = Account.objects.filter(user=request.user).first()
+    # if isinstance(request.user, User):
+    account = Account.objects.filter(user=request.user).first()
     if account is None:
         data = {"message": "کاربر مورد نظر یافت نشد."}
         return Response(data, status.HTTP_404_NOT_FOUND)

@@ -129,9 +129,13 @@ def request_room(request, room_id):
                 responseStatus = status.HTTP_400_BAD_REQUEST
         else:
             if userRoomArray.first():
-                userRoomArray.delete()
-                UserRelationsInRoom.objects.filter(user1=account).delete()
-                UserRelationsInRoom.objects.filter(user2=account).delete()
+                if userRoomArray.first().user_state == StateType.OK:
+                    # TODO Check and change other user state in ROOM_USER TABLE if this user state is OK
+                    delete_membership(userRoomArray, account)
+                    checkChangeOtherUserState(room.id)
+                else:
+                    delete_membership(userRoomArray, account)
+
                 finalData["message"] = "با موفقیت از اتاق " + str(room) + " حذف شدید."
             else:
                 finalData["message"] = "شما از اعضای اتاق " + str(room) + " نمی‌باشید."
@@ -149,6 +153,20 @@ def request_room(request, room_id):
 # def delete_request(request):
 #     data = {"data": "", "message": ""}
 #     return Response(data)
+def delete_membership(userRoomArray, account):
+    userRoomArray.delete()
+    UserRelationsInRoom.objects.filter(user1=account).delete()
+    UserRelationsInRoom.objects.filter(user2=account).delete()
+
+
+def checkChangeOtherUserState(room_id):
+    pending_users_in_room = Room_User.objects.filter(room=room_id, user_state=StateType.PENDING)
+    for row in pending_users_in_room:
+        room_user_row = Room_User.objects.filter(user=row.user_id).first()
+        should_add = checkAddToRoom(row.user_id, room_user_row, room_user_row.room)
+        print(should_add, row.user_id, "HIII")
+        if should_add:
+            break
 
 
 @api_view(['POST'])
@@ -186,23 +204,39 @@ def answer_user(request):
                                                             data=data)
                 serializer.is_valid()
                 serializer.save()
-                message = checkAddToRoom(pended_account_id, room_user_row, room)
                 logMessageForPendedUser = 'شما توسط کاربر ' + str(
                     responder_account.user) + ' برای عضویت در اتاق ' + str(room) + ' تایید شدید.'
+                logMessageSerializer = LogMessageSerializers(
+                    data={"user": pended_account.id, "message": logMessageForPendedUser, "type": MessageType.ACCEPT})
+                logMessageSerializer.is_valid()
+                print(logMessageSerializer.errors, "Seria Log M error")
+                logMessageSerializer.save()
+                should_add = checkAddToRoom(pended_account_id, room_user_row, room)
+                if should_add:
+                    if room_user_row_confirm.user_state == StateType.OK:
+                        message = "عضوی که شما تایید کردید تایید همه اعضای اتاق را گرفته است و به اتاق اضافه می‌شود."
+                    else:
+                        message = "شما تایید همه‌ی اعضای اتاق را گرفته‌اید و همه‌ی اعضای اتاق را نیز تایید کرده‌اید و به اتاق اضافه می‌شوید."
+                else:
+                    if room_user_row_confirm.user_state == StateType.OK:
+                        message = "عضوی که شما تایید کردید تایید همه اعضای اتاق را نگرفته است و فعلا باید منتظر بماند."
+                    else:
+                        message = "شما هنوز تایید همه‌ی اعضای اتاق را نگرفته‌اید و یا همه‌ی اعضای اتاق را نیز تایید نکرده‌اید و فعلا باید منتظر بمانید."
+
             else:
 
                 logMessageForPendedUser = 'شما توسط کاربر ' + str(
                     responder_account.user) + ' برای عضویت در اتاق ' + str(room) + ' رد شدید.'
+                logMessageSerializer = LogMessageSerializers(
+                    data={"user": pended_account.id, "message": logMessageForPendedUser, "type": MessageType.REJECT})
+                logMessageSerializer.is_valid()
+                print(logMessageSerializer.errors, "Seria Log M error")
+                logMessageSerializer.save()
                 rowForRoom.delete()
                 UserRelationsInRoom.objects.filter(user1=pended_account).delete()
                 UserRelationsInRoom.objects.filter(user2=pended_account).delete()
                 message = "رد فرد مورد نظر با موفقیت انجام شد."
 
-            logMessageSerializer = LogMessageSerializers(
-                data={"user": pended_account.id, "message": logMessageForPendedUser, "type": MessageType.REJECT})
-            logMessageSerializer.is_valid()
-            print(logMessageSerializer.errors, "Seria Log M error")
-            logMessageSerializer.save()
         else:
             message = "کاربر مورد نظر و شما در اتاق یکسانی قرار ندارید!"
             responseStatus = status.HTTP_404_NOT_FOUND
@@ -225,7 +259,7 @@ def checkAddToRoom(pended_id, room_user_row, room):
     # room_user_row = Room_User.objects.filter(user=pended_id).first()
     # room_user_row_confirm = Room_User.objects.filter(user=responder_id).first()
     # if (room_user_row_confirm is not None) and (room_user_row.room == room_user_row_confirm.room):
-        # room = room_user_row.room
+    # room = room_user_row.room
     real_room_member_rows = Room_User.objects.filter(room=room,
                                                      user_state=StateType.OK)  # All confirmed room members
     # print(real_room_member_rows, "RR")
@@ -247,19 +281,19 @@ def checkAddToRoom(pended_id, room_user_row, room):
                                           data={"room": room.id, "user": pended_id, "user_state": StateType.OK})
         serializer.is_valid()
         serializer.save()
-        message = "عضوی که شما تایید کردید تایید همه اعضای اتاق را گرفته است و همچنین اعضای تایید شده اتاق را تایید کرده است و به اتاق اضافه می‌شود."
+        # message = "عضوی که شما تایید کردید تایید همه اعضای اتاق را گرفته است و همچنین اعضای تایید شده اتاق را تایید کرده است و به اتاق اضافه می‌شود."
         logMessageForPendedUser = 'شما توسط همه‌ی اعضای اتاق ' + str(room) + ' تایید شدید و به اتاق اضاقه شدید.'
         logMessageSerializer = LogMessageSerializers(
-            data={"user": pended_id, "message": logMessageForPendedUser, "type": MessageType.REJECT})
+            data={"user": pended_id, "message": logMessageForPendedUser, "type": MessageType.ACCEPT})
         logMessageSerializer.is_valid()
         print(logMessageSerializer.errors, "Seria Log M error11")
         logMessageSerializer.save()
-    else:
-        message = "عضوی که شما تایید کردید تایید همه اعضای اتاق را نگرفته است و یا همه اعضای تایید شده اتاق را تایید نکرده است و فعلا باید منتظر بماند."
+    # else:
+    #     message = "عضوی که شما تایید کردید تایید همه اعضای اتاق را نگرفته است و یا همه اعضای تایید شده اتاق را تایید نکرده است و فعلا باید منتظر بماند."
 
     # else:
     #     message = "اتاقی برای این کاربر ثبت نشده است!"
-    return message
+    return confirm
 
 
 @api_view(['GET'])
@@ -267,6 +301,7 @@ def checkAddToRoom(pended_id, room_user_row, room):
 def get_waiting_users(request):
     user = request.user
     data = getWaitingUsers(user)
+    print(data, "KK")
     return Response(data)
 
 
@@ -275,8 +310,7 @@ def getWaitingUsers(user):
     row_for_user_in_room_user = Room_User.objects.filter(user=account).first()
     data = {"data": {"is_in_room": False, "data": []}, "message": ""}
     if row_for_user_in_room_user is None:
-        data['not_request_for_room'] = True
-        return Response(data, status=status.HTTP_200_OK)
+        data["data"]['not_request_for_room'] = True
     else:
         state_in_room = row_for_user_in_room_user.user_state
         waitingUsers = []
