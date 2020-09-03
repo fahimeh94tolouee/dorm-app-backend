@@ -12,9 +12,12 @@ from accounts.serializers import AccountSerializer
 @permission_classes((IsAuthenticated,))
 def init(request):
     account = Account.objects.filter(user=request.user).first()
+    data = {"data": {}, "message": ''}
+    responseStatus = status.HTTP_200_OK
     if account is None:
-        data = {"message": "کاربر مورد نظر یافت نشد."}
-        return Response(data, status.HTTP_404_NOT_FOUND)
+        data["message"] = "کاربر مورد نظر یافت نشد."
+        responseStatus = status.HTTP_404_NOT_FOUND
     else:
         serializer = AccountSerializer(account)
-        return Response(serializer.data)
+        data["data"]["user"] = serializer.data
+    return Response(data, responseStatus)

@@ -148,11 +148,6 @@ def request_room(request, room_id):
     return Response(finalData, status=responseStatus)
 
 
-# @api_view(['DELETE'])
-# @permission_classes([IsAuthenticated, ])
-# def delete_request(request):
-#     data = {"data": "", "message": ""}
-#     return Response(data)
 def delete_membership(userRoomArray, account):
     userRoomArray.delete()
     UserRelationsInRoom.objects.filter(user1=account).delete()
@@ -243,26 +238,14 @@ def answer_user(request):
     else:
         message = "کاربر مورد نظر شما یافت نشد!"
         responseStatus = status.HTTP_404_NOT_FOUND
-    # room_user_row = Room_User.objects.filter(user=pended_account_id).first()
-    # all_corresponding_room_user_rows = Room_User.objects.filter(room=room_user_row.room.id)
-    # all_user_with_state = Account.objects.filter(id__in=all_corresponding_room_user_rows.values('user_id'))
-    # print(all_user_with_state, "TTTT")
-    # membersListSerializer = Room_UserSerializers(list(all_corresponding_room_user_rows), many=True)
-    # data = {"data": membersListSerializer.data, "message": message}
     data = getWaitingUsers(responder_user_id)
     data["message"] = message
     return Response(data, status=responseStatus)
 
 
 def checkAddToRoom(pended_id, room_user_row, room):
-    message = ""
-    # room_user_row = Room_User.objects.filter(user=pended_id).first()
-    # room_user_row_confirm = Room_User.objects.filter(user=responder_id).first()
-    # if (room_user_row_confirm is not None) and (room_user_row.room == room_user_row_confirm.room):
-    # room = room_user_row.room
     real_room_member_rows = Room_User.objects.filter(room=room,
                                                      user_state=StateType.OK)  # All confirmed room members
-    # print(real_room_member_rows, "RR")
     confirm = True
     for row in real_room_member_rows:
         real_member_id = row.user_id
@@ -288,11 +271,6 @@ def checkAddToRoom(pended_id, room_user_row, room):
         logMessageSerializer.is_valid()
         print(logMessageSerializer.errors, "Seria Log M error11")
         logMessageSerializer.save()
-    # else:
-    #     message = "عضوی که شما تایید کردید تایید همه اعضای اتاق را نگرفته است و یا همه اعضای تایید شده اتاق را تایید نکرده است و فعلا باید منتظر بماند."
-
-    # else:
-    #     message = "اتاقی برای این کاربر ثبت نشده است!"
     return confirm
 
 
@@ -347,3 +325,15 @@ def getWaitingUsers(user):
         serializer = AccountSerializer(waitingUsers, many=True)
         data['data']["data"] = serializer.data
     return data
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, ])
+def get_user_relation(request):
+    user = request.user
+    account = Account.objects.filter(user=user).first()
+    userRelation1 = UserRelationsInRoom.objects.filter(user1=account.id)
+    userRelation2 = UserRelationsInRoom.objects.filter(user2=account.id)
+    all_userRelations = userRelation1.union(userRelation2)
+    serializer = UserRelationsInRoomSerializers(all_userRelations, many=True)
+    return Response(serializer.data)
